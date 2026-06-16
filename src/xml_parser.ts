@@ -1,18 +1,21 @@
 import NODE_TYPES from './node_types';
 
-export type ParserFn = (node: Element, objectStack: any[]) => void;
-
+export type StackObject = Record<string, unknown>;
+export type StackItem = StackObject | unknown[];
+export type ParserStack = StackItem[];
+export type ParserFn = (node: Element, stack: ParserStack) => void;
+export type ReaderFn = (node: Element, stack: ParserStack) => unknown;
 export type ParsersNS = Record<string, Record<string, ParserFn>>;
 
 export default class XMLParser {
-  private readonly doParser: { new (): { parseFromString(xml: string, mime: string): Document } };
+  private _domParser: Pick<DOMParser, 'parseFromString'>;
 
-  constructor(DOMParser: { new (): { parseFromString(xml: string, mime: string): Document } }) {
-    this.doParser = DOMParser;
+  constructor(domParser: Pick<DOMParser, 'parseFromString'>) {
+    this._domParser = domParser;
   }
 
   toDocument(xml: string): Document {
-    return new this.doParser().parseFromString(xml, 'application/xml');
+    return this._domParser.parseFromString(xml, 'application/xml');
   }
 
   getAllTextContent(node: Node, normalizeWhitespace = false): string {
@@ -37,13 +40,13 @@ function collectText(node: Node, normalize: boolean, acc: string[]): void {
   }
 }
 
-export function parseNode(parsersNS: ParsersNS, node: Element, stack: any[], bind?: any): void {
+export function parseNode(parsersNS: ParsersNS, node: Element, stack: ParserStack, ctx?: object): void {
   for (let child = firstElementChild(node); child != null; child = nextElementSibling(child)) {
     const uri = child.namespaceURI ?? '';
-    const map = parsersNS[uri];
-    if (!map) continue;
-    const parser = map[child.localName];
-    if (parser) parser.call(bind, child, stack);
+    const ns = parsersNS[uri];
+    if (!ns) continue;
+    const parser = ns[child.localName];
+    if (parser) parser.call(ctx, child, stack);
   }
 }
 
@@ -70,46 +73,41 @@ export function makeParsersNS(
 }
 
 export function pushParseAndPop(
-  seed: any,
+  seed: StackItem,
   parsersNS: ParsersNS,
   node: Element,
-  stack: any[],
-  bind?: any,
-): any {
+  stack: ParserStack,
+  ctx?: object,
+): StackItem {
   stack.push(seed);
-  parseNode(parsersNS, node, stack, bind);
-  return stack.pop();
+  parseNode(parsersNS, node, stack, ctx);
+  return stack.pop() as StackItem;
 }
 
-export function makeArrayPusher(valueReader: (node: Element, stack: any[]) => any): ParserFn {
-  return (node, stack) => {
-    const value = valueReader(node, stack);
-    if (value != null) stack[stack.length - 1].push(value);
-  };
-}
-
-export function makeObjectPropertySetter(
-  valueReader: (node: Element, stack: any[]) => any,
-  property?: string,
-): ParserFn {
-  return (node, stack) => {
-    const value = valueReader(node, stack);
-    if (value != null) {
-      stack[stack.length - 1][property ?? node.localName] = value;
-    }
-  };
-}
-
-export function makeObjectPropertyPusher(
-  valueReader: (node: Element, stack: any[]) => any,
-  property?: string,
-): ParserFn {
+export function makeArrayPusher(valueReader: ReaderFn): ParserFn {
   return (node, stack) => {
     const value = valueReader(node, stack);
     if (value == null) return;
-    const obj = stack[stack.length - 1];
+    (stack[stack.length - 1] as unknown[]).push(value);
+  };
+}
+
+export function makeObjectPropertySetter(valueReader: ReaderFn, property?: string): ParserFn {
+  return (node, stack) => {
+    const value = valueReader(node, stack);
+    if (value == null) return;
+    const obj = stack[stack.length - 1] as StackObject;
+    obj[property ?? node.localName] = value;
+  };
+}
+
+export function makeObjectPropertyPusher(valueReader: ReaderFn, property?: string): ParserFn {
+  return (node, stack) => {
+    const value = valueReader(node, stack);
+    if (value == null) return;
+    const obj = stack[stack.length - 1] as StackObject;
     const key = property ?? node.localName;
     if (!(key in obj)) obj[key] = [];
-    obj[key].push(value);
+    (obj[key] as unknown[]).push(value);
   };
 }

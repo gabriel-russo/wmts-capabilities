@@ -5,35 +5,44 @@ import type { WMTSCapabilitiesJSON } from './types';
 
 export type { WMTSCapabilitiesJSON } from './types';
 
+function resolveDOMParser(
+  domParser?: Pick<DOMParser, 'parseFromString'>,
+): Pick<DOMParser, 'parseFromString'> {
+  if (domParser != null) return domParser;
+  const global = globalThis as Record<string, unknown>;
+  if (typeof global.DOMParser === 'function') {
+    return new (global.DOMParser as typeof DOMParser)();
+  }
+  throw new TypeError(
+    'DOMParser not found. In Node.js, pass an instance from @xmldom/xmldom:\n' +
+      '  import { DOMParser } from "@xmldom/xmldom";\n' +
+      '  new WMTS(xml, new DOMParser()).toJSON();',
+  );
+}
+
 export default class WMTS {
   version: string | undefined;
-  private docParser: XMLParser;
-  private xmlData: string | undefined;
+  private readonly _parser: XMLParser;
+  private _xml: string | undefined;
 
-  constructor(
-    xmlString?: string,
-    DOMParser?: { new (): { parseFromString(xml: string, mime: string): Document } },
-  ) {
-    if (DOMParser == null) {
-      throw new TypeError('DOMParser constructor is required. Use @xmldom/xmldom in Node.js.');
-    }
-    this.docParser = new XMLParser(DOMParser);
-    this.xmlData = xmlString;
+  constructor(xml?: string, domParser?: Pick<DOMParser, 'parseFromString'>) {
+    this._parser = new XMLParser(resolveDOMParser(domParser));
+    this._xml = xml;
   }
 
   setXml(xml: string): this {
-    this.xmlData = xml;
+    this._xml = xml;
     return this;
   }
 
   toJSON(xml?: string): WMTSCapabilitiesJSON | null {
-    const source = xml ?? this.xmlData;
+    const source = xml ?? this._xml;
     if (source == null) throw new Error('No XML provided');
     return this.parse(source);
   }
 
   parse(xml: string): WMTSCapabilitiesJSON | null {
-    return this.readFromDocument(this.docParser.toDocument(xml));
+    return this.readFromDocument(this._parser.toDocument(xml));
   }
 
   readFromDocument(doc: Document): WMTSCapabilitiesJSON | null {
@@ -52,6 +61,6 @@ export default class WMTS {
       PARSERS,
       node,
       [],
-    ) as WMTSCapabilitiesJSON;
+    ) as unknown as WMTSCapabilitiesJSON;
   }
 }

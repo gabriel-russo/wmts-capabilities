@@ -34,7 +34,7 @@ stream.resume();
 stream.on('end', function () {
   try {
     var WMTS = WMTSCapabilities.default || WMTSCapabilities;
-    var parser = new WMTS(undefined, xmldom.DOMParser);
+    var parser = new WMTS(undefined, new xmldom.DOMParser());
     var json = parser.parse(xml);
     if (json === null) {
       console.error('Error: failed to parse XML');

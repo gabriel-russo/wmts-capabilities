@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { DOMParser } from '@xmldom/xmldom';
@@ -7,6 +7,10 @@ import WMTSCapabilities, { type WMTSCapabilitiesJSON } from '../src/index';
 function loadXml(filename: string): string {
   return readFileSync(resolve(__dirname, 'fixtures', filename), 'utf-8');
 }
+
+const domParser = new DOMParser();
+
+type GlobalWithDOMParser = typeof globalThis & { DOMParser?: unknown };
 
 describe('WMTSCapabilities', () => {
   const fixtures = [
@@ -20,7 +24,9 @@ describe('WMTSCapabilities', () => {
 
       beforeAll(() => {
         const xml = loadXml(fixture.name);
-        json = new WMTSCapabilities(undefined, DOMParser).parse(xml)!;
+        const result = new WMTSCapabilities(undefined, domParser).parse(xml);
+        if (result == null) throw new Error('parse returned null');
+        json = result;
       });
 
       it('should parse without error', () => {
@@ -53,8 +59,9 @@ describe('WMTSCapabilities', () => {
       it('should have GetCapabilities operation', () => {
         const op = json.OperationsMetadata.Operation.find((o) => o.name === 'GetCapabilities');
         expect(op).toBeDefined();
-        expect(op!.DCP).toBeDefined();
-        expect(op!.DCP.length).toBeGreaterThan(0);
+        if (op == null) throw new Error('expected GetCapabilities operation');
+        expect(op.DCP).toBeDefined();
+        expect(op.DCP.length).toBeGreaterThan(0);
       });
 
       it('should have GetTile operation', () => {
@@ -104,25 +111,28 @@ describe('WMTSCapabilities', () => {
 
       it('toJSON should work', () => {
         const xml = loadXml(fixture.name);
-        const json2 = new WMTSCapabilities(xml, DOMParser).toJSON();
+        const json2 = new WMTSCapabilities(xml, domParser).toJSON();
         expect(json2).toBeTruthy();
-        expect(json2!.version).toBe(fixture.version);
+        if (json2 == null) throw new Error('expected result');
+        expect(json2.version).toBe(fixture.version);
       });
 
       it('should parse with setXml + toJSON', () => {
         const xml = loadXml(fixture.name);
-        const parser = new WMTSCapabilities(undefined, DOMParser);
+        const parser = new WMTSCapabilities(undefined, domParser);
         const result = parser.setXml(xml).toJSON();
         expect(result).toBeTruthy();
-        expect(result!.version).toBe(fixture.version);
+        if (result == null) throw new Error('expected result');
+        expect(result.version).toBe(fixture.version);
       });
 
       it('should parse with readFromDocument', () => {
         const xml = loadXml(fixture.name);
-        const parser = new WMTSCapabilities(undefined, DOMParser);
+        const parser = new WMTSCapabilities(undefined, domParser);
         const result = parser.parse(xml);
         expect(result).toBeTruthy();
-        expect(result!.version).toBe(fixture.version);
+        if (result == null) throw new Error('expected result');
+        expect(result.version).toBe(fixture.version);
       });
 
       it('should have ResourceURL in layers', () => {
@@ -142,4 +152,30 @@ describe('WMTSCapabilities', () => {
       });
     });
   }
+
+  describe('DOMParser auto-detection (browser)', () => {
+    const xml = loadXml('anatel-capabilities.xml');
+
+    afterEach(() => {
+      delete (globalThis as GlobalWithDOMParser).DOMParser;
+    });
+
+    it('should work without explicit DOMParser when globalThis.DOMParser is set', () => {
+      (globalThis as GlobalWithDOMParser).DOMParser = DOMParser;
+      const json = new WMTSCapabilities(undefined).parse(xml);
+      expect(json).toBeTruthy();
+      if (json == null) throw new Error('expected result');
+      expect(json.version).toBe('1.0.0');
+    });
+
+    it('should throw when no DOMParser is available', () => {
+      expect(() => new WMTSCapabilities(undefined)).toThrow(/DOMParser/);
+    });
+
+    it('should prefer explicit DOMParser over globalThis.DOMParser', () => {
+      (globalThis as GlobalWithDOMParser).DOMParser = { parseFromString: () => ({}) };
+      const json = new WMTSCapabilities(undefined, new DOMParser()).parse(xml);
+      expect(json).toBeTruthy();
+    });
+  });
 });

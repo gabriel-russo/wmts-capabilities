@@ -5,11 +5,9 @@ import {
   pushParseAndPop,
   makeArrayPusher,
 } from './xml_parser';
-import type { ParserFn } from './xml_parser';
+import type { ParserFn, StackObject, ParserStack, ReaderFn } from './xml_parser';
 import { readString, parseBoolean, readNonNegativeInteger, readDecimal } from './xsd';
 import { readHref } from './xlink';
-
-// ── Namespaces ────────────────────────────────────────────────────
 
 const WMTS = 'http://www.opengis.net/wmts/1.0';
 const OWS = 'http://www.opengis.net/ows/1.1';
@@ -21,10 +19,9 @@ function readCoordinates(node: Element): number[] | undefined {
   return s ? s.split(/\s+/).map(Number) : undefined;
 }
 
-// BoundingBox (WGS84 and regular share the same structure)
-function readWGS84BoundingBox(node: Element, stack: any[]): any {
+function readWGS84BoundingBox(node: Element, stack: ParserStack): StackObject {
   const crs = node.getAttribute('crs');
-  const obj = pushParseAndPop({}, OWS_BBOX_PARSERS, node, stack);
+  const obj = pushParseAndPop({}, OWS_BBOX_PARSERS, node, stack) as StackObject;
   if (crs) obj.crs = crs;
   return obj;
 }
@@ -33,50 +30,60 @@ const readBoundingBox = readWGS84BoundingBox;
 
 // ── OperationsMetadata ────────────────────────────────────────────
 
-function readOperation(node: Element, stack: any[]): any {
-  return pushParseAndPop({ name: node.getAttribute('name') ?? '' }, OPERATION_PARSERS, node, stack);
+function readOperation(node: Element, stack: ParserStack): StackObject {
+  return pushParseAndPop(
+    { name: node.getAttribute('name') ?? '' },
+    OPERATION_PARSERS,
+    node,
+    stack,
+  ) as StackObject;
 }
 
-function readGetPost(node: Element, stack: any[]): any {
+function readGetPost(node: Element, stack: ParserStack): string | StackObject {
   const href = readHref(node);
-  const obj = pushParseAndPop({}, GETPOST_PARSERS, node, stack);
+  const obj = pushParseAndPop({}, GETPOST_PARSERS, node, stack) as StackObject;
   if (href != null) obj.href = href;
   if (Object.keys(obj).length === 1 && 'href' in obj) return href as string;
   return obj;
 }
 
-function readParameter(node: Element, stack: any[]): any {
-  return pushParseAndPop({ name: node.getAttribute('name') ?? '' }, PARAMETER_PARSERS, node, stack);
+function readParameter(node: Element, stack: ParserStack): StackObject {
+  return pushParseAndPop(
+    { name: node.getAttribute('name') ?? '' },
+    PARAMETER_PARSERS,
+    node,
+    stack,
+  ) as StackObject;
 }
 
-function readAllowedValues(node: Element, stack: any[]): any {
-  return pushParseAndPop([], ALLOWED_VALUES_PARSERS, node, stack);
+function readAllowedValues(node: Element, stack: ParserStack): string[] {
+  return pushParseAndPop([], ALLOWED_VALUES_PARSERS, node, stack) as unknown as string[];
 }
 
 // ── Contents ──────────────────────────────────────────────────────
 
-function readStyle(node: Element, stack: any[]): any {
+function readStyle(node: Element, stack: ParserStack): StackObject {
   const isDefault = parseBoolean(node.getAttribute('isDefault') ?? '');
-  const obj = pushParseAndPop({}, STYLE_PARSERS, node, stack);
+  const obj = pushParseAndPop({}, STYLE_PARSERS, node, stack) as StackObject;
   if (isDefault != null) obj.isDefault = isDefault;
   return obj;
 }
 
-function readLegendURL(node: Element): any {
+function readLegendURL(node: Element): StackObject {
   const href = readHref(node);
-  const obj: any = {};
+  const obj: StackObject = {};
   const format = node.getAttribute('format');
-  const width = node.getAttribute('width');
-  const height = node.getAttribute('height');
+  const widthAttr = node.getAttribute('width');
+  const heightAttr = node.getAttribute('height');
   if (format) obj.format = format;
   if (href) obj.href = href;
-  if (width != null) obj.width = parseFloat(width);
-  if (height != null) obj.height = parseFloat(height);
+  if (widthAttr != null) obj.width = parseFloat(widthAttr);
+  if (heightAttr != null) obj.height = parseFloat(heightAttr);
   return obj;
 }
 
-function readResourceURL(node: Element): any {
-  const obj: any = {};
+function readResourceURL(node: Element): StackObject {
+  const obj: StackObject = {};
   const format = node.getAttribute('format');
   const resourceType = node.getAttribute('resourceType');
   const template = node.getAttribute('template');
@@ -86,26 +93,26 @@ function readResourceURL(node: Element): any {
   return obj;
 }
 
-function readMetadata(node: Element): any {
+function readMetadata(node: Element): StackObject {
   const href = readHref(node);
   const about = node.getAttribute('about');
   const type = node.getAttributeNS('http://www.w3.org/1999/xlink', 'type');
-  const obj: any = {};
+  const obj: StackObject = {};
   if (href) obj.href = href;
   if (about) obj.about = about;
   if (type) obj.type = type;
   return obj;
 }
 
-function readKeywords(node: Element, stack: any[]): any {
-  return pushParseAndPop([], KEYWORDS_PARSERS, node, stack);
+function readKeywords(node: Element, stack: ParserStack): string[] {
+  return pushParseAndPop([], KEYWORDS_PARSERS, node, stack) as unknown as string[];
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// Parser maps — defined bottom-up so all refs are hoisted-safe
-// ═══════════════════════════════════════════════════════════════════
+function readTheme(node: Element, stack: ParserStack): StackObject {
+  return pushParseAndPop({}, THEME_PARSERS, node, stack) as StackObject;
+}
 
-// Shared bits
+// ── Shared helpers ────────────────────────────────────────────────
 
 function stringProps(...names: string[]): Record<string, ParserFn> {
   return Object.fromEntries(names.map((n) => [n, makeObjectPropertySetter(readString)]));
@@ -113,7 +120,13 @@ function stringProps(...names: string[]): Record<string, ParserFn> {
 
 const keywords = makeObjectPropertySetter(readKeywords);
 
-// ── Leaf-level parsers ────────────────────────────────────────────
+const subtree = (parsers: Record<string, Record<string, ParserFn>>): ReaderFn => {
+  return (node: Element, stack: ParserStack) => pushParseAndPop({}, parsers, node, stack);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// Parser maps — leaf to root
+// ═══════════════════════════════════════════════════════════════════
 
 const KEYWORDS_PARSERS = makeParsersNS([OWS], {
   Keyword: makeArrayPusher(readString),
@@ -129,7 +142,7 @@ const ALLOWED_VALUES_PARSERS = makeParsersNS([OWS], {
 });
 
 const PARAMETER_PARSERS = makeParsersNS([OWS], {
-  AllowedValues: makeObjectPropertySetter(readAllowedValues as ParserFn),
+  AllowedValues: makeObjectPropertySetter(readAllowedValues),
 });
 
 const GETPOST_PARSERS = makeParsersNS([OWS], {
@@ -142,11 +155,11 @@ const HTTP_PARSERS = makeParsersNS([OWS], {
 });
 
 const DCP_PARSERS = makeParsersNS([OWS], {
-  HTTP: makeObjectPropertySetter((node, stack) => pushParseAndPop({}, HTTP_PARSERS, node, stack)),
+  HTTP: makeObjectPropertySetter(subtree(HTTP_PARSERS)),
 });
 
 const OPERATION_PARSERS = makeParsersNS([OWS], {
-  DCP: makeObjectPropertyPusher((node, stack) => pushParseAndPop({}, DCP_PARSERS, node, stack)),
+  DCP: makeObjectPropertyPusher(subtree(DCP_PARSERS)),
   Parameter: makeObjectPropertyPusher(readParameter),
   Constraint: makeObjectPropertyPusher(readParameter),
 });
@@ -156,8 +169,6 @@ const OPERATIONS_METADATA_PARSERS = makeParsersNS([OWS], {
   Parameter: makeObjectPropertyPusher(readParameter),
   Constraint: makeObjectPropertyPusher(readParameter),
 });
-
-// ── ServiceIdentification ─────────────────────────────────────────
 
 const SERVICE_IDENTIFICATION_PARSERS = makeParsersNS([OWS], {
   ...stringProps(
@@ -170,8 +181,6 @@ const SERVICE_IDENTIFICATION_PARSERS = makeParsersNS([OWS], {
   ),
   Keywords: keywords,
 });
-
-// ── ServiceProvider ───────────────────────────────────────────────
 
 const ADDRESS_PARSERS = makeParsersNS(
   [OWS],
@@ -188,24 +197,20 @@ const ADDRESS_PARSERS = makeParsersNS(
 const PHONE_PARSERS = makeParsersNS([OWS], stringProps('Voice', 'Facsimile'));
 
 const CONTACT_INFO_PARSERS = makeParsersNS([OWS], {
-  Phone: makeObjectPropertySetter((n, s) => pushParseAndPop({}, PHONE_PARSERS, n, s)),
-  Address: makeObjectPropertySetter((n, s) => pushParseAndPop({}, ADDRESS_PARSERS, n, s)),
+  Phone: makeObjectPropertySetter(subtree(PHONE_PARSERS)),
+  Address: makeObjectPropertySetter(subtree(ADDRESS_PARSERS)),
 });
 
 const SERVICE_CONTACT_PARSERS = makeParsersNS([OWS], {
   ...stringProps('IndividualName', 'PositionName'),
-  ContactInfo: makeObjectPropertySetter((n, s) => pushParseAndPop({}, CONTACT_INFO_PARSERS, n, s)),
+  ContactInfo: makeObjectPropertySetter(subtree(CONTACT_INFO_PARSERS)),
 });
 
 const SERVICE_PROVIDER_PARSERS = makeParsersNS([OWS], {
   ProviderName: makeObjectPropertySetter(readString),
   ProviderSite: makeObjectPropertySetter(readHref),
-  ServiceContact: makeObjectPropertySetter((n, s) =>
-    pushParseAndPop({}, SERVICE_CONTACT_PARSERS, n, s),
-  ),
+  ServiceContact: makeObjectPropertySetter(subtree(SERVICE_CONTACT_PARSERS)),
 });
-
-// ── Layers ────────────────────────────────────────────────────────
 
 const STYLE_PARSERS = makeParsersNS([WMTS, OWS], {
   ...stringProps('Title', 'Identifier', 'Abstract'),
@@ -222,16 +227,12 @@ const TILE_MATRIX_LIMITS_PARSERS = makeParsersNS([WMTS], {
 });
 
 const TILE_MATRIX_SET_LIMITS_PARSERS = makeParsersNS([WMTS], {
-  TileMatrixLimits: makeObjectPropertyPusher((n, s) =>
-    pushParseAndPop({}, TILE_MATRIX_LIMITS_PARSERS, n, s),
-  ),
+  TileMatrixLimits: makeObjectPropertyPusher(subtree(TILE_MATRIX_LIMITS_PARSERS)),
 });
 
 const TILE_MATRIX_SET_LINK_PARSERS = makeParsersNS([WMTS], {
   TileMatrixSet: makeObjectPropertySetter(readString),
-  TileMatrixSetLimits: makeObjectPropertySetter((n, s) =>
-    pushParseAndPop({}, TILE_MATRIX_SET_LIMITS_PARSERS, n, s),
-  ),
+  TileMatrixSetLimits: makeObjectPropertySetter(subtree(TILE_MATRIX_SET_LIMITS_PARSERS)),
 });
 
 const LAYER_PARSERS = makeParsersNS([WMTS, OWS], {
@@ -243,13 +244,9 @@ const LAYER_PARSERS = makeParsersNS([WMTS, OWS], {
   Style: makeObjectPropertyPusher(readStyle),
   Format: makeObjectPropertyPusher(readString),
   InfoFormat: makeObjectPropertyPusher(readString),
-  TileMatrixSetLink: makeObjectPropertyPusher((n, s) =>
-    pushParseAndPop({}, TILE_MATRIX_SET_LINK_PARSERS, n, s),
-  ),
+  TileMatrixSetLink: makeObjectPropertyPusher(subtree(TILE_MATRIX_SET_LINK_PARSERS)),
   ResourceURL: makeObjectPropertyPusher(readResourceURL),
 });
-
-// ── TileMatrixSet ─────────────────────────────────────────────────
 
 const TILE_MATRIX_PARSERS = makeParsersNS([WMTS, OWS], {
   ...stringProps('Title', 'Abstract', 'Identifier'),
@@ -267,19 +264,13 @@ const TILE_MATRIX_SET_ITEM_PARSERS = makeParsersNS([WMTS, OWS], {
   Keywords: keywords,
   Metadata: makeObjectPropertyPusher(readMetadata),
   BoundingBox: makeObjectPropertySetter(readBoundingBox),
-  TileMatrix: makeObjectPropertyPusher((n, s) => pushParseAndPop({}, TILE_MATRIX_PARSERS, n, s)),
+  TileMatrix: makeObjectPropertyPusher(subtree(TILE_MATRIX_PARSERS)),
 });
-
-// ── Contents ──────────────────────────────────────────────────────
 
 const CONTENTS_PARSERS = makeParsersNS([WMTS], {
-  Layer: makeObjectPropertyPusher((n, s) => pushParseAndPop({}, LAYER_PARSERS, n, s)),
-  TileMatrixSet: makeObjectPropertyPusher((n, s) =>
-    pushParseAndPop({}, TILE_MATRIX_SET_ITEM_PARSERS, n, s),
-  ),
+  Layer: makeObjectPropertyPusher(subtree(LAYER_PARSERS)),
+  TileMatrixSet: makeObjectPropertyPusher(subtree(TILE_MATRIX_SET_ITEM_PARSERS)),
 });
-
-// ── Themes (self-referential) ─────────────────────────────────────
 
 const baseThemeParsers: Record<string, ParserFn> = {
   ...stringProps('Title', 'Abstract', 'Identifier'),
@@ -288,11 +279,6 @@ const baseThemeParsers: Record<string, ParserFn> = {
 };
 
 const THEME_PARSERS = makeParsersNS([WMTS, OWS], baseThemeParsers);
-
-function readTheme(node: Element, stack: any[]): any {
-  return pushParseAndPop({}, THEME_PARSERS, node, stack);
-}
-
 THEME_PARSERS[WMTS].Theme = makeObjectPropertyPusher(readTheme);
 THEME_PARSERS[OWS].Theme = makeObjectPropertyPusher(readTheme);
 
@@ -301,20 +287,14 @@ const THEMES_PARSERS = makeParsersNS([WMTS], {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// Root parsers
+// Root
 // ═══════════════════════════════════════════════════════════════════
 
 export const PARSERS = makeParsersNS([WMTS, OWS], {
-  ServiceIdentification: makeObjectPropertySetter((n, s) =>
-    pushParseAndPop({}, SERVICE_IDENTIFICATION_PARSERS, n, s),
-  ),
-  ServiceProvider: makeObjectPropertySetter((n, s) =>
-    pushParseAndPop({}, SERVICE_PROVIDER_PARSERS, n, s),
-  ),
-  OperationsMetadata: makeObjectPropertySetter((n, s) =>
-    pushParseAndPop({}, OPERATIONS_METADATA_PARSERS, n, s),
-  ),
-  Contents: makeObjectPropertySetter((n, s) => pushParseAndPop({}, CONTENTS_PARSERS, n, s)),
-  Themes: makeObjectPropertySetter((n, s) => pushParseAndPop({}, THEMES_PARSERS, n, s)),
+  ServiceIdentification: makeObjectPropertySetter(subtree(SERVICE_IDENTIFICATION_PARSERS)),
+  ServiceProvider: makeObjectPropertySetter(subtree(SERVICE_PROVIDER_PARSERS)),
+  OperationsMetadata: makeObjectPropertySetter(subtree(OPERATIONS_METADATA_PARSERS)),
+  Contents: makeObjectPropertySetter(subtree(CONTENTS_PARSERS)),
+  Themes: makeObjectPropertySetter(subtree(THEMES_PARSERS)),
   ServiceMetadataURL: makeObjectPropertySetter(readHref),
 });

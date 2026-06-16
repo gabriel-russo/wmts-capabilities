@@ -25,7 +25,8 @@ export function readDecimal(node: Element): number | undefined {
 export function parseDecimal(text: string): number | undefined {
   const m = /^\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)\s*$/i.exec(text);
   if (m === null) return undefined;
-  return parseFloat(m[1]!);
+  const value = m[1];
+  return value !== undefined ? parseFloat(value) : undefined;
 }
 
 export function readNonNegativeInteger(node: Element): number | undefined {
@@ -35,5 +36,6 @@ export function readNonNegativeInteger(node: Element): number | undefined {
 export function parseNonNegativeInteger(text: string): number | undefined {
   const m = /^\s*(\d+)\s*$/.exec(text);
   if (m === null) return undefined;
-  return parseInt(m[1]!, 10);
+  const value = m[1];
+  return value !== undefined ? parseInt(value, 10) : undefined;
 }
