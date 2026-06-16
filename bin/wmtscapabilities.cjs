@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-var xmldom = require('xmldom');
-var WMTSCapabilites = require('../dist/wmts-capabilities.min.js');
+var xmldom = require('@xmldom/xmldom');
+var WMTSCapabilities = require('../dist/wmts-capabilities.umd.cjs');
 var fs = require('fs');
 var path = require('path');
 
@@ -14,8 +14,8 @@ var arg = args[0];
 var stream = process.stdin;
 
 if (arg === '--version') {
-  console.log(pkg.version)
-  process.exit(0)
+  console.log(pkg.version);
+  process.exit(0);
 } else if (arg === '--help') {
   console.log('\n WMTS Capabilities converter', pkg.version, '\n');
   console.log('  $ cat capabilities.xml | wmtscapabilities > out.json');
@@ -32,6 +32,17 @@ stream.on('data', function (data) {
 stream.resume();
 
 stream.on('end', function () {
-  var json = new WMTSCapabilites(xml, xmldom.DOMParser).toJSON();
-  process.stdout.write(JSON.stringify(json, 0, 2) + '\n');
+  try {
+    var WMTS = WMTSCapabilities.default || WMTSCapabilities;
+    var parser = new WMTS(undefined, xmldom.DOMParser);
+    var json = parser.parse(xml);
+    if (json === null) {
+      console.error('Error: failed to parse XML');
+      process.exit(1);
+    }
+    process.stdout.write(JSON.stringify(json, null, 2) + '\n');
+  } catch (e) {
+    console.error('Error:', e.message);
+    process.exit(1);
+  }
 });

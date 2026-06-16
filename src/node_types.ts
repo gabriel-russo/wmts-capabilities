@@ -1,7 +1,4 @@
-/**
- * @enum {Number}
- */
-const NODE_TYPES = {
+export const NODE_TYPES = {
   ELEMENT: 1,
   ATTRIBUTE: 2,
   TEXT: 3,
@@ -13,7 +10,7 @@ const NODE_TYPES = {
   DOCUMENT: 9,
   DOCUMENT_TYPE: 10,
   DOCUMENT_FRAGMENT: 11,
-  NOTATION: 12
-};
+  NOTATION: 12,
+} as const;
 
 export default NODE_TYPES;
