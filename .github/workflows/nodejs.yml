@@ -1,7 +1,10 @@
 name: Test
 
 on:
+  workflow_dispatch:
   push:
+    paths:
+      - '**.ts'
     branches: [ master ]
   pull_request:
     branches: [ master ]
