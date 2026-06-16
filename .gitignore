@@ -32,5 +32,3 @@ node_modules
 
 .reify-cache
 dist
-*-lock.json
-*-lock.yaml
