@@ -1,11 +1,11 @@
-import XMLParser, { 
+import {
   makeObjectPropertySetter,
   makeObjectPropertyPusher,
   makeParsersNS,
   pushParseAndPop,
   makeArrayPusher
 } from './xml_parser';
-import { 
+import {
   readString,
   readDecimalString,
   readBooleanString,
@@ -17,682 +17,383 @@ import { readHref } from './xlink';
 import setIfUndefined from './utils/setifundefined';
 import isDef from './utils/isdef';
 
-/**
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Attribution object.
- */
-function readAttribution(node, objectStack) {
-  return pushParseAndPop({}, ATTRIBUTION_PARSERS, node, objectStack);
-}
+var WMTS_NS = 'http://www.opengis.net/wmts/1.0';
+var OWS_NS = 'http://www.opengis.net/ows/1.1';
 
-
-/**
- * @private
- * @param {Node} node Node.
- * @return {ol.Extent} Bounding box object.
- */
-function readBoundingBoxExtent (node) {
-  return [
-    readDecimalString(node.getAttribute('minx')),
-    readDecimalString(node.getAttribute('miny')),
-    readDecimalString(node.getAttribute('maxx')),
-    readDecimalString(node.getAttribute('maxy'))
-  ];
-}
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object} Bounding box object.
- */
-function readBoundingBox (node, objectStack) {
-  const extent = readBoundingBoxExtent(node);
-  const resolutions = [
-    readDecimalString(node.getAttribute('resx')),
-    readDecimalString(node.getAttribute('resy'))
-  ];
-
-  return {
-    'crs': node.getAttribute('CRS') || node.getAttribute('SRS'),
-    extent, res: resolutions
-  };
-}
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {ol.Extent|undefined} Bounding box object.
- */
-function readLatLonBoundingBox (node, objectStack) {
-  const extent = readBoundingBoxExtent(node);
-
-  if (!isDef(extent[0]) || !isDef(extent[1]) ||
-    !isDef(extent[2]) || !isDef(extent[3])) {
-    return undefined;
+function readCoordinates(node) {
+  var s = readString(node);
+  if (s) {
+    return s.split(/\s+/).map(function(v) { return parseFloat(v); });
   }
-
-  return extent;
+  return undefined;
 }
 
-
-/**
- * @privat
- * @param  {Node} node  Node
- * @param  {Arra.<Object>} objectStack Object stack
- * @return {Object}
- */
-function readScaleHint (node, objectStack) {
-  const min = parseFloat(node.getAttribute('min'));
-  const max = parseFloat(node.getAttribute('max'));
-
-  return { min, max };
+function readServiceIdentification(node, objectStack) {
+  return pushParseAndPop({}, SERVICE_IDENTIFICATION_PARSERS, node, objectStack);
 }
 
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {ol.Extent|undefined} Bounding box object.
- */
-function readEXGeographicBoundingBox (node, objectStack) {
-  const geographicBoundingBox = pushParseAndPop({},
-    EX_GEOGRAPHIC_BOUNDING_BOX_PARSERS,
-    node, objectStack);
-  if (!isDef(geographicBoundingBox)) return undefined;
-
-  const westBoundLongitude = /** @type {number|undefined} */
-    (geographicBoundingBox['westBoundLongitude']);
-  const southBoundLatitude = /** @type {number|undefined} */
-    (geographicBoundingBox['southBoundLatitude']);
-  const eastBoundLongitude = /** @type {number|undefined} */
-    (geographicBoundingBox['eastBoundLongitude']);
-  const northBoundLatitude = /** @type {number|undefined} */
-    (geographicBoundingBox['northBoundLatitude']);
-
-  if (!isDef(westBoundLongitude) || !isDef(southBoundLatitude) ||
-    !isDef(eastBoundLongitude) || !isDef(northBoundLatitude)) {
-    return undefined;
-  }
-
-  return [
-    westBoundLongitude, southBoundLatitude,
-    eastBoundLongitude, northBoundLatitude
-  ];
+function readServiceProvider(node, objectStack) {
+  return pushParseAndPop({}, SERVICE_PROVIDER_PARSERS, node, objectStack);
 }
 
-
-/**
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @private
- * @return {Object|undefined} Capability object.
- */
-function readCapability (node, objectStack) {
-  return pushParseAndPop({}, CAPABILITY_PARSERS, node, objectStack);
+function readServiceContact(node, objectStack) {
+  return pushParseAndPop({}, SERVICE_CONTACT_PARSERS, node, objectStack);
 }
 
-
-/**
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @private
- * @return {Object|undefined} Service object.
- */
-function readService (node, objectStack) {
-  return pushParseAndPop({}, SERVICE_PARSERS, node, objectStack);
+function readContactInfo(node, objectStack) {
+  return pushParseAndPop({}, CONTACT_INFO_PARSERS, node, objectStack);
 }
 
-
-/**
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @private
- * @return {Object|undefined} Contact information object.
- */
-function readContactInformation (node, objectStack) {
-  return pushParseAndPop({}, CONTACT_INFORMATION_PARSERS,
-    node, objectStack);
+function readPhone(node, objectStack) {
+  return pushParseAndPop([], PHONE_PARSERS, node, objectStack);
 }
 
-
-/**
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @private
- * @return {Object|undefined} Contact person object.
- */
-function readContactPersonPrimary (node, objectStack) {
-  return pushParseAndPop({}, CONTACT_PERSON_PARSERS,
-    node, objectStack);
+function readAddress(node, objectStack) {
+  return pushParseAndPop({}, ADDRESS_PARSERS, node, objectStack);
 }
 
-
-/**
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @private
- * @return {Object|undefined} Contact address object.
- */
-function readContactAddress (node, objectStack) {
-  return pushParseAndPop({}, CONTACT_ADDRESS_PARSERS,
-    node, objectStack);
+function readOperationsMetadata(node, objectStack) {
+  return pushParseAndPop({}, OPERATIONS_METADATA_PARSERS, node, objectStack);
 }
 
-
-/**
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @private
- * @return {Array.<string>|undefined} Format array.
- */
-function readException (node, objectStack) {
-  return pushParseAndPop(
-    [], EXCEPTION_PARSERS, node, objectStack);
+function readOperation(node, objectStack) {
+  var name = node.getAttribute('name');
+  return pushParseAndPop({ 'name': name }, OPERATION_PARSERS, node, objectStack);
 }
 
-
-/**
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @private
- * @return {Object|undefined} Layer object.
- */
-function readCapabilityLayer (node, objectStack) {
-  const queryable = readBooleanString(node.getAttribute('queryable'));  
-  return pushParseAndPop({
-    queryable: isDef(queryable) ? queryable : false }, 
-    LAYER_PARSERS, node, objectStack);
+function readDCP(node, objectStack) {
+  return pushParseAndPop({}, DCP_PARSERS, node, objectStack);
 }
 
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Layer object.
- */
-function readLayer (node, objectStack) {
-  var parentLayerObject = /**  @type {Object.<string,*>} */
-    (objectStack[objectStack.length - 1]);
-
-  const layerObject = /**  @type {Object.<string,*>} */
-    (pushParseAndPop({}, LAYER_PARSERS,
-      node, objectStack));
-
-  if (!isDef(layerObject)) return undefined;
-
-  let queryable = readBooleanString(node.getAttribute('queryable'));
-  if (!isDef(queryable)) {
-    queryable = parentLayerObject['queryable'];
-  }
-  layerObject['queryable'] = isDef(queryable) ? queryable : false;
-
-  let cascaded = readNonNegativeIntegerString(node.getAttribute('cascaded'));
-  if (!isDef(cascaded)) {
-    cascaded = parentLayerObject['cascaded'];
-  }
-  layerObject['cascaded'] = cascaded;
-
-  let opaque = readBooleanString(node.getAttribute('opaque'));
-  if (!isDef(opaque)) {
-    opaque = parentLayerObject['opaque'];
-  }
-  layerObject['opaque'] = isDef(opaque) ? opaque : false;
-
-  let noSubsets = readBooleanString(node.getAttribute('noSubsets'));
-  if (!isDef(noSubsets)) {
-    noSubsets = parentLayerObject['noSubsets'];
-  }
-  layerObject['noSubsets'] = isDef(noSubsets) ? noSubsets : false;
-
-  let fixedWidth = readDecimalString(node.getAttribute('fixedWidth'));
-  if (!isDef(fixedWidth)) {
-    fixedWidth = parentLayerObject['fixedWidth'];
-  }
-  layerObject['fixedWidth'] = fixedWidth;
-
-  let fixedHeight = readDecimalString(node.getAttribute('fixedHeight'));
-  if (!isDef(fixedHeight)) {
-    fixedHeight = parentLayerObject['fixedHeight'];
-  }
-  layerObject['fixedHeight'] = fixedHeight;
-
-  // See 7.2.4.8
-  const addKeys = ['Style', 'CRS', 'AuthorityURL'];
-  for (let i = 0, len = addKeys.length; i < len; i++) {
-    const key = addKeys[i];
-    const parentValue = parentLayerObject[key];
-    if (isDef(parentValue)) {
-      let childValue = setIfUndefined(layerObject, key, []);
-      childValue = childValue.concat(parentValue);
-      layerObject[key] = childValue;
-    }
-  }
-
-  const replaceKeys = ['EX_GeographicBoundingBox', 'BoundingBox', 'Dimension',
-    'Attribution', 'MinScaleDenominator', 'MaxScaleDenominator'
-  ];
-  for (let i = 0, len = replaceKeys.length; i < len; i++) {
-    const key = replaceKeys[i];
-    const childValue = layerObject[key];
-    if (!isDef(childValue)) {
-      const parentValue = parentLayerObject[key];
-      layerObject[key] = parentValue;
-    }
-  }
-
-  return layerObject;
-}
-
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object} Dimension object.
- */
-function readDimension (node, objectStack) {
-  return {
-    'name': node.getAttribute('name'),
-    'units': node.getAttribute('units'),
-    'unitSymbol': node.getAttribute('unitSymbol'),
-    'default': node.getAttribute('default'),
-    'multipleValues': readBooleanString(node.getAttribute('multipleValues')),
-    'nearestValue': readBooleanString(node.getAttribute('nearestValue')),
-    'current': readBooleanString(node.getAttribute('current')),
-    'values': readString(node)
-  };
-}
-
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Online resource object.
- */
-function readFormatOnlineresource (node, objectStack) {
-  return pushParseAndPop({}, FORMAT_ONLINERESOURCE_PARSERS,
-    node, objectStack);
-}
-
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Request object.
- */
-function readRequest (node, objectStack) {
-  return pushParseAndPop({}, REQUEST_PARSERS, node, objectStack);
-}
-
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} DCP type object.
- */
-function readDCPType (node, objectStack) {
-  return pushParseAndPop({}, DCPTYPE_PARSERS, node, objectStack);
-}
-
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} HTTP object.
- */
-function readHTTP (node, objectStack) {
+function readHTTP(node, objectStack) {
   return pushParseAndPop({}, HTTP_PARSERS, node, objectStack);
 }
 
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Operation type object.
- */
-function readOperationType (node, objectStack) {
-  return pushParseAndPop({}, OPERATIONTYPE_PARSERS, node, objectStack);
-}
-
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Online resource object.
- */
-function readSizedFormatOnlineresource (node, objectStack) {
-  var formatOnlineresource = readFormatOnlineresource(node, objectStack);
-  if (isDef(formatOnlineresource)) {
-    const size = [
-      readNonNegativeIntegerString(node.getAttribute('width')),
-      readNonNegativeIntegerString(node.getAttribute('height'))
-    ];
-    formatOnlineresource['size'] = size;
-    return formatOnlineresource;
+function readGetPost(node, objectStack) {
+  var href = readHref(node);
+  var obj = pushParseAndPop({}, GETPOST_PARSERS, node, objectStack);
+  if (isDef(href)) obj['href'] = href;
+  var keys = Object.keys(obj);
+  if (keys.length === 1 && isDef(obj['href'])) {
+    return href;
   }
-  return undefined;
+  return obj;
 }
 
+function readConstraint(node, objectStack) {
+  var name = node.getAttribute('name');
+  return pushParseAndPop({ 'name': name }, CONSTRAINT_PARSERS, node, objectStack);
+}
 
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Authority URL object.
- */
-function readAuthorityURL (node, objectStack) {
-  var authorityObject = readFormatOnlineresource(node, objectStack);
-  if (isDef(authorityObject)) {
-    authorityObject['name'] = node.getAttribute('name');
-    return authorityObject;
+function readAllowedValues(node, objectStack) {
+  return pushParseAndPop([], ALLOWED_VALUES_PARSERS, node, objectStack);
+}
+
+function readContents(node, objectStack) {
+  return pushParseAndPop({}, CONTENT_PARSERS, node, objectStack);
+}
+
+function readContentLayer(node, objectStack) {
+  return pushParseAndPop({}, LAYER_PARSERS, node, objectStack);
+}
+
+function readStyle(node, objectStack) {
+  var isDefault = readBooleanString(node.getAttribute('isDefault'));
+  var styleObj = pushParseAndPop({}, STYLE_PARSERS, node, objectStack);
+  if (isDef(styleObj) && isDef(isDefault)) {
+    styleObj['isDefault'] = isDefault;
   }
-  return undefined;
+  return styleObj;
 }
 
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Metadata URL object.
- */
-function readMetadataURL (node, objectStack) {
-  var metadataObject = readFormatOnlineresource(node, objectStack);
-  if (isDef(metadataObject)) {
-    metadataObject['type'] = node.getAttribute('type');
-    return metadataObject;
-  }
-  return undefined;
+function readLegendURL(node, objectStack) {
+  var obj = {};
+  var format = node.getAttribute('format');
+  var href = readHref(node);
+  var width = readDecimalString(node.getAttribute('width'));
+  var height = readDecimalString(node.getAttribute('height'));
+  if (isDef(format)) obj['format'] = format;
+  if (isDef(href)) obj['href'] = href;
+  if (isDef(width)) obj['width'] = width;
+  if (isDef(height)) obj['height'] = height;
+  return obj;
 }
 
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Object|undefined} Style object.
- */
-function readStyle (node, objectStack) {
-  return pushParseAndPop({}, STYLE_PARSERS, node, objectStack);
+function readTileMatrixSetLink(node, objectStack) {
+  return pushParseAndPop({}, TILE_MATRIX_SET_LINK_PARSERS, node, objectStack);
 }
 
-
-/**
- * @private
- * @param {Node} node Node.
- * @param {Array.<*>} objectStack Object stack.
- * @return {Array.<string>|undefined} Keyword list.
- */
-function readKeywordList (node, objectStack) {
-  return pushParseAndPop(
-    [], KEYWORDLIST_PARSERS, node, objectStack);
+function readTileMatrixSetLimits(node, objectStack) {
+  return pushParseAndPop({}, TILE_MATRIX_SET_LIMITS_PARSERS, node, objectStack);
 }
 
+function readTileMatrixLimits(node, objectStack) {
+  return pushParseAndPop({}, TILE_MATRIX_LIMITS_PARSERS, node, objectStack);
+}
 
-/**
- * @const
- * @type {Array.<string>}
- */
-const NAMESPACE_URIS = [
-  null,
-  'http://www.opengis.net/wms'
-];
+function readResourceURL(node, objectStack) {
+  var format = node.getAttribute('format');
+  var resourceType = node.getAttribute('resourceType');
+  var template = node.getAttribute('template');
+  var obj = {};
+  if (isDef(format)) obj['format'] = format;
+  if (isDef(resourceType)) obj['resourceType'] = resourceType;
+  if (isDef(template)) obj['template'] = template;
+  return obj;
+}
 
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-export const PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Service': makeObjectPropertySetter(readService),
-    'Capability': makeObjectPropertySetter(readCapability)
+function readTileMatrixSet(node, objectStack) {
+  return pushParseAndPop({}, TILE_MATRIX_SET_ITEM_PARSERS, node, objectStack);
+}
+
+function readTileMatrix(node, objectStack) {
+  return pushParseAndPop({}, TILE_MATRIX_PARSERS, node, objectStack);
+}
+
+function readWGS84BoundingBox(node, objectStack) {
+  var crs = node.getAttribute('crs');
+  var obj = pushParseAndPop({}, OWS_BOUNDING_BOX_PARSERS, node, objectStack);
+  if (isDef(crs)) obj['crs'] = crs;
+  return obj;
+}
+
+function readBoundingBox(node, objectStack) {
+  var crs = node.getAttribute('crs');
+  var obj = pushParseAndPop({}, OWS_BOUNDING_BOX_PARSERS, node, objectStack);
+  if (isDef(crs)) obj['crs'] = crs;
+  return obj;
+}
+
+function readKeywords(node, objectStack) {
+  return pushParseAndPop([], KEYWORDS_PARSERS, node, objectStack);
+}
+
+function readTileMatrixSetName(node) {
+  return readString(node);
+}
+
+function readThemes(node, objectStack) {
+  return pushParseAndPop([], THEMES_PARSERS, node, objectStack);
+}
+
+function readTheme(node, objectStack) {
+  return pushParseAndPop({}, THEME_PARSERS, node, objectStack);
+}
+
+function readLayerRef(node) {
+  return readString(node);
+}
+
+function readMetadata(node, objectStack) {
+  var href = readHref(node);
+  var about = node.getAttribute('about');
+  var type = node.getAttributeNS('http://www.w3.org/1999/xlink', 'type');
+  var obj = {};
+  if (isDef(href)) obj['href'] = href;
+  if (isDef(about)) obj['about'] = about;
+  if (isDef(type)) obj['type'] = type;
+  return obj;
+}
+
+var ROOT_NAMESPACE_URIS = [WMTS_NS, OWS_NS];
+
+export var PARSERS = makeParsersNS(
+  ROOT_NAMESPACE_URIS, {
+    'ServiceIdentification': makeObjectPropertySetter(readServiceIdentification),
+    'ServiceProvider': makeObjectPropertySetter(readServiceProvider),
+    'OperationsMetadata': makeObjectPropertySetter(readOperationsMetadata),
+    'Contents': makeObjectPropertySetter(readContents),
+    'Themes': makeObjectPropertySetter(readThemes),
+    'ServiceMetadataURL': makeObjectPropertySetter(readHref)
   });
 
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const CAPABILITY_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Request': makeObjectPropertySetter(readRequest),
-    'Exception': makeObjectPropertySetter(readException),
-    'Layer': makeObjectPropertySetter(readCapabilityLayer)
-  });
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const SERVICE_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Name': makeObjectPropertySetter(readString),
+var SERVICE_IDENTIFICATION_PARSERS = makeParsersNS(
+  [OWS_NS], {
     'Title': makeObjectPropertySetter(readString),
     'Abstract': makeObjectPropertySetter(readString),
-    'KeywordList': makeObjectPropertySetter(readKeywordList),
-    'OnlineResource': makeObjectPropertySetter(readHref),
-    'ContactInformation': makeObjectPropertySetter(readContactInformation),
+    'Keywords': makeObjectPropertySetter(readKeywords),
+    'ServiceType': makeObjectPropertySetter(readString),
+    'ServiceTypeVersion': makeObjectPropertySetter(readString),
     'Fees': makeObjectPropertySetter(readString),
-    'AccessConstraints': makeObjectPropertySetter(readString),
-    'LayerLimit': makeObjectPropertySetter(readNonNegativeInteger),
-    'MaxWidth': makeObjectPropertySetter(readNonNegativeInteger),
-    'MaxHeight': makeObjectPropertySetter(readNonNegativeInteger)
+    'AccessConstraints': makeObjectPropertySetter(readString)
   });
 
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const CONTACT_INFORMATION_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'ContactPersonPrimary': makeObjectPropertySetter(readContactPersonPrimary),
-    'ContactPosition': makeObjectPropertySetter(readString),
-    'ContactAddress': makeObjectPropertySetter(readContactAddress),
-    'ContactVoiceTelephone': makeObjectPropertySetter(readString),
-    'ContactFacsimileTelephone': makeObjectPropertySetter(readString),
-    'ContactElectronicMailAddress': makeObjectPropertySetter(readString)
+var SERVICE_PROVIDER_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'ProviderName': makeObjectPropertySetter(readString),
+    'ProviderSite': makeObjectPropertySetter(readHref),
+    'ServiceContact': makeObjectPropertySetter(readServiceContact)
   });
 
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const CONTACT_PERSON_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'ContactPerson': makeObjectPropertySetter(readString),
-    'ContactOrganization': makeObjectPropertySetter(readString)
+var SERVICE_CONTACT_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'IndividualName': makeObjectPropertySetter(readString),
+    'PositionName': makeObjectPropertySetter(readString),
+    'ContactInfo': makeObjectPropertySetter(readContactInfo)
   });
 
+var CONTACT_INFO_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'Phone': makeObjectPropertySetter(readPhone),
+    'Address': makeObjectPropertySetter(readAddress)
+  });
 
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const CONTACT_ADDRESS_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'AddressType': makeObjectPropertySetter(readString),
-    'Address': makeObjectPropertySetter(readString),
+var PHONE_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'Voice': makeObjectPropertySetter(readString),
+    'Facsimile': makeObjectPropertySetter(readString)
+  });
+
+var ADDRESS_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'DeliveryPoint': makeObjectPropertySetter(readString),
     'City': makeObjectPropertySetter(readString),
-    'StateOrProvince': makeObjectPropertySetter(readString),
-    'PostCode': makeObjectPropertySetter(readString),
-    'Country': makeObjectPropertySetter(readString)
+    'AdministrativeArea': makeObjectPropertySetter(readString),
+    'PostalCode': makeObjectPropertySetter(readString),
+    'Country': makeObjectPropertySetter(readString),
+    'ElectronicMailAddress': makeObjectPropertySetter(readString)
   });
 
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const EXCEPTION_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Format': makeArrayPusher(readString)
+var OPERATIONS_METADATA_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'Operation': makeObjectPropertyPusher(readOperation),
+    'Parameter': makeObjectPropertyPusher(readConstraint),
+    'Constraint': makeObjectPropertyPusher(readConstraint)
   });
 
+var OPERATION_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'DCP': makeObjectPropertyPusher(readDCP),
+    'Parameter': makeObjectPropertyPusher(readConstraint),
+    'Constraint': makeObjectPropertyPusher(readConstraint)
+  });
 
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const LAYER_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Name': makeObjectPropertySetter(readString),
+var DCP_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'HTTP': makeObjectPropertySetter(readHTTP)
+  });
+
+var HTTP_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'Get': makeObjectPropertyPusher(readGetPost),
+    'Post': makeObjectPropertyPusher(readGetPost)
+  });
+
+var GETPOST_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'Constraint': makeObjectPropertyPusher(readConstraint)
+  });
+
+var CONSTRAINT_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'AllowedValues': makeObjectPropertySetter(readAllowedValues)
+  });
+
+var ALLOWED_VALUES_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'Value': makeArrayPusher(readString)
+  });
+
+var CONTENT_PARSERS = makeParsersNS(
+  [WMTS_NS], {
+    'Layer': makeObjectPropertyPusher(readContentLayer),
+    'TileMatrixSet': makeObjectPropertyPusher(readTileMatrixSet)
+  });
+
+var LAYER_PARSERS = makeParsersNS(
+  [WMTS_NS, OWS_NS], {
     'Title': makeObjectPropertySetter(readString),
     'Abstract': makeObjectPropertySetter(readString),
-    'KeywordList': makeObjectPropertySetter(readKeywordList),
-    'CRS': makeObjectPropertyPusher(readString),
-    'SRS': makeObjectPropertyPusher(readString),
-    'EX_GeographicBoundingBox': makeObjectPropertySetter(readEXGeographicBoundingBox),
-    'LatLonBoundingBox': makeObjectPropertySetter(readLatLonBoundingBox),
+    'Keywords': makeObjectPropertySetter(readKeywords),
+    'WGS84BoundingBox': makeObjectPropertySetter(readWGS84BoundingBox),
     'BoundingBox': makeObjectPropertyPusher(readBoundingBox),
-    'Dimension': makeObjectPropertyPusher(readDimension),
-    'Attribution': makeObjectPropertySetter(readAttribution),
-    'AuthorityURL': makeObjectPropertyPusher(readAuthorityURL),
-    'Identifier': makeObjectPropertyPusher(readString),
-    'MetadataURL': makeObjectPropertyPusher(readMetadataURL),
-    'DataURL': makeObjectPropertyPusher(readFormatOnlineresource),
-    'FeatureListURL': makeObjectPropertyPusher(readFormatOnlineresource),
+    'Identifier': makeObjectPropertySetter(readString),
+    'Metadata': makeObjectPropertyPusher(readMetadata),
     'Style': makeObjectPropertyPusher(readStyle),
-    'MinScaleDenominator': makeObjectPropertySetter(readDecimal),
-    'MaxScaleDenominator': makeObjectPropertySetter(readDecimal),
-    'ScaleHint': makeObjectPropertySetter(readScaleHint),
-    'Layer': makeObjectPropertyPusher(readLayer)
-  });
-
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const ATTRIBUTION_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Title': makeObjectPropertySetter(readString),
-    'OnlineResource': makeObjectPropertySetter(readHref),
-    'LogoURL': makeObjectPropertySetter(readSizedFormatOnlineresource)
-  });
-
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const EX_GEOGRAPHIC_BOUNDING_BOX_PARSERS =
-  makeParsersNS(NAMESPACE_URIS, {
-    'westBoundLongitude': makeObjectPropertySetter(readDecimal),
-    'eastBoundLongitude': makeObjectPropertySetter(readDecimal),
-    'southBoundLatitude': makeObjectPropertySetter(readDecimal),
-    'northBoundLatitude': makeObjectPropertySetter(readDecimal)
-  });
-
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const REQUEST_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'GetCapabilities': makeObjectPropertySetter(
-      readOperationType),
-    'GetMap': makeObjectPropertySetter(
-      readOperationType),
-    'GetFeatureInfo': makeObjectPropertySetter(
-      readOperationType)
-  });
-
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const OPERATIONTYPE_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
     'Format': makeObjectPropertyPusher(readString),
-    'DCPType': makeObjectPropertyPusher(
-      readDCPType)
+    'InfoFormat': makeObjectPropertyPusher(readString),
+    'TileMatrixSetLink': makeObjectPropertyPusher(readTileMatrixSetLink),
+    'ResourceURL': makeObjectPropertyPusher(readResourceURL)
   });
 
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const DCPTYPE_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'HTTP': makeObjectPropertySetter(
-      readHTTP)
+var STYLE_PARSERS = makeParsersNS(
+  [WMTS_NS, OWS_NS], {
+    'Title': makeObjectPropertySetter(readString),
+    'Identifier': makeObjectPropertySetter(readString),
+    'Abstract': makeObjectPropertySetter(readString),
+    'Keywords': makeObjectPropertySetter(readKeywords),
+    'LegendURL': makeObjectPropertyPusher(readLegendURL)
   });
 
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const HTTP_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Get': makeObjectPropertySetter(
-      readFormatOnlineresource),
-    'Post': makeObjectPropertySetter(
-      readFormatOnlineresource)
+var TILE_MATRIX_SET_LINK_PARSERS = makeParsersNS(
+  [WMTS_NS], {
+    'TileMatrixSet': makeObjectPropertySetter(readTileMatrixSetName),
+    'TileMatrixSetLimits': makeObjectPropertySetter(readTileMatrixSetLimits)
   });
 
+var TILE_MATRIX_SET_LIMITS_PARSERS = makeParsersNS(
+  [WMTS_NS], {
+    'TileMatrixLimits': makeObjectPropertyPusher(readTileMatrixLimits)
+  });
 
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const STYLE_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Name': makeObjectPropertySetter(readString),
+var TILE_MATRIX_LIMITS_PARSERS = makeParsersNS(
+  [WMTS_NS], {
+    'TileMatrix': makeObjectPropertySetter(readString),
+    'MinTileRow': makeObjectPropertySetter(readNonNegativeIntegerString),
+    'MaxTileRow': makeObjectPropertySetter(readNonNegativeIntegerString),
+    'MinTileCol': makeObjectPropertySetter(readNonNegativeIntegerString),
+    'MaxTileCol': makeObjectPropertySetter(readNonNegativeIntegerString)
+  });
+
+var TILE_MATRIX_SET_ITEM_PARSERS = makeParsersNS(
+  [WMTS_NS, OWS_NS], {
     'Title': makeObjectPropertySetter(readString),
     'Abstract': makeObjectPropertySetter(readString),
-    'LegendURL': makeObjectPropertyPusher(readSizedFormatOnlineresource),
-    'StyleSheetURL': makeObjectPropertySetter(readFormatOnlineresource),
-    'StyleURL': makeObjectPropertySetter(readFormatOnlineresource)
+    'Keywords': makeObjectPropertySetter(readKeywords),
+    'Identifier': makeObjectPropertySetter(readString),
+    'Metadata': makeObjectPropertyPusher(readMetadata),
+    'SupportedCRS': makeObjectPropertySetter(readString),
+    'BoundingBox': makeObjectPropertySetter(readBoundingBox),
+    'WellKnownScaleSet': makeObjectPropertySetter(readString),
+    'TileMatrix': makeObjectPropertyPusher(readTileMatrix)
   });
 
-
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const FORMAT_ONLINERESOURCE_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
-    'Format': makeObjectPropertySetter(readString),
-    'OnlineResource': makeObjectPropertySetter(readHref)
+var TILE_MATRIX_PARSERS = makeParsersNS(
+  [WMTS_NS, OWS_NS], {
+    'Title': makeObjectPropertySetter(readString),
+    'Abstract': makeObjectPropertySetter(readString),
+    'Keywords': makeObjectPropertySetter(readKeywords),
+    'Identifier': makeObjectPropertySetter(readString),
+    'ScaleDenominator': makeObjectPropertySetter(readDecimal),
+    'TopLeftCorner': makeObjectPropertySetter(readCoordinates),
+    'TileWidth': makeObjectPropertySetter(readNonNegativeInteger),
+    'TileHeight': makeObjectPropertySetter(readNonNegativeInteger),
+    'MatrixWidth': makeObjectPropertySetter(readNonNegativeInteger),
+    'MatrixHeight': makeObjectPropertySetter(readNonNegativeInteger)
   });
 
+var OWS_BOUNDING_BOX_PARSERS = makeParsersNS(
+  [OWS_NS], {
+    'LowerCorner': makeObjectPropertySetter(readCoordinates),
+    'UpperCorner': makeObjectPropertySetter(readCoordinates)
+  });
 
-/**
- * @const
- * @type {Object.<string, Object.<string, XMLParser.Parser>>}
- * @private
- */
-const KEYWORDLIST_PARSERS = makeParsersNS(
-  NAMESPACE_URIS, {
+var KEYWORDS_PARSERS = makeParsersNS(
+  [OWS_NS], {
     'Keyword': makeArrayPusher(readString)
+  });
+
+var THEMES_PARSERS = makeParsersNS(
+  [WMTS_NS], {
+    'Theme': makeArrayPusher(readTheme)
+  });
+
+var THEME_PARSERS = makeParsersNS(
+  [WMTS_NS, OWS_NS], {
+    'Title': makeObjectPropertySetter(readString),
+    'Abstract': makeObjectPropertySetter(readString),
+    'Keywords': makeObjectPropertySetter(readKeywords),
+    'Identifier': makeObjectPropertySetter(readString),
+    'LayerRef': makeObjectPropertyPusher(readLayerRef),
+    'Theme': makeObjectPropertyPusher(readTheme)
   });

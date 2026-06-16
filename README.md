@@ -1,51 +1,43 @@
-# WMS `GetCapabilities` parser
-[![npm version](https://badge.fury.io/js/wms-capabilities.svg)](http://badge.fury.io/js/wms-capabilities)
+# WMTS `GetCapabilities` parser
+[![npm version](https://badge.fury.io/js/wmts-capabilities.svg)](http://badge.fury.io/js/wmts-capabilities)
 
-Parses [WMS](http://en.wikipedia.org/wiki/Web_Map_Service) capabilities XML format to JSON. This is a simplified excerpt from [OpenLayers](https://github.com/openlayers/ol3) code to be used separately from its large codebase.
-
-## [Demo](https://w8r.github.io/wms-capabilities)
+Parses [WMTS](http://en.wikipedia.org/wiki/Web_Map_Tile_Service) capabilities XML format to JSON.
+Based on the [wms-capabilities](https://github.com/w8r/wms-capabilities) library.
 
 ## Usage
 
 ### ES
 ```
-npm install wms-capabilities --save
+npm install wmts-capabilities --save
 ```
 ```js
-import WMSCapabilities from 'wms-capabilities';
-...
-new WMSCapabilities().parse(xmlString);
-//or
-new WMSCapabilities(xmlString).toJSON();
-// or 
-new WMSCapabilities().readFromDocument(xmldoc);
+import WMTSCapabilities from 'wmts-capabilities';
+new WMTSCapabilities().parse(xmlString);
+new WMTSCapabilities(xmlString).toJSON();
+new WMTSCapabilities().readFromDocument(xmldoc);
 ```
+
 ### Browser
 ```html
-<script src="path/to/wms-capabilities.min.js"></script>
-...
-new WMSCapabilities().parse(xmlString);
+<script src="path/to/wmts-capabilities.min.js"></script>
+```
+```js
+new WMTSCapabilities().parse(xmlString);
 ```
 
 ### Node
-
 Requires `xmldom` to traverse XML
-```sh
-$npm install --save xmldom
-```
-then
 ```js
-import xmldom from 'xmldom'; // 'xmldom' doesn't 'export' the DOMParser
-import WMSCapabilities from 'wms-capabilities';
-...
-new WMSCapabilities(xmlString, xmldom.DOMParser).toJSON();
+import xmldom from 'xmldom';
+import WMTSCapabilities from 'wmts-capabilities';
+new WMTSCapabilities(xmlString, xmldom.DOMParser).toJSON();
 ```
 
 ### Command-line
-
-```sh
-$ npm install -g wms-capabilities
-$ cat capabilities.xml | wmscapabilities > out.json
-$ # or
-$ wmscapabilities capabilities.json > out.json
+```
+npm install -g wmts-capabilities
+```
+```
+cat capabilities.xml | wmtscapabilities > out.json
+wmtscapabilities capabilities.xml > out.json
 ```
