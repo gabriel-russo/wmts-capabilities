@@ -1,7 +1,7 @@
 {
   "name": "wmts-capabilities",
-  "version": "0.1.0",
-  "description": "WMTS GetCapabilities XML to JSON parser",
+  "version": "0.2.0",
+  "description": "WMTS (Web Map Tile Service) Capabilities XML to JSON parser",
   "type": "module",
   "files": [
     "dist"
@@ -53,6 +53,7 @@
     "getcapabilities",
     "capabilities",
     "geoserver",
+    "Web Map Tile Service",
     "xml",
     "json"
   ],
